@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "id": 1,
+      "name": "Maxthon Browser",
+      "mutation_type": "Framing Flip",
+      "claim": "Maxthon is reported to be the second most popular browser in China, and it has been downloaded more than 400 million times worldwide.",
+      "truth": "Maxthon has been noted to be more popular in China than the rest of the world. It was reported as the second most popular browser in China and has been downloaded more than 400 million times worldwide."
+    },
+    {
+      "id": 2,
+      "name": "COVID Feb 13",
+      "mutation_type": "Temporal + Missing Caveat",
+      "claim": "More than 65,213 cases have been confirmed after February 13, 2020.",
+      "truth": "As of 13 February 2020, 65,213 cases have been confirmed (10,627 serious), including in every province-level division of China, but official figures may not have counted a large number of people who have yet to be detected."
+    },
+    {
+      "id": 3,
+      "name": "Mexico Phase 3",
+      "mutation_type": "Fabricated Date",
+      "claim": "Before May 1, the Mexican government announced to have entered Phase 3 of its coronavirus contingency plan.",
+      "truth": "In cases of suspected or confirmed cases of coronavirus, the bodies can not be exhumed for at least 180 days after the date of death. The government announced that Mexico had entered Phase 3 of its contingency plan."
+    },
+    {
+      "id": 4,
+      "name": "COVID Deaths March 19",
+      "mutation_type": "Numerical Understatement",
+      "claim": "There had been more than 9,250 deaths related to COVID-19 in more than 150 countries by March 19, 2020.",
+      "truth": "As of 19 March, more than 227,000 cases of COVID-19 have been reported in over 150 countries and territories, resulting in more than 9,300 deaths and 85,000 recoveries."
+    },
+    {
+      "id": 5,
+      "name": "COVID March 24",
+      "mutation_type": "Date Shift + Rounding",
+      "claim": "There had been more than 375,000 confirmed cases of COVID-19 worldwide by March 24.",
+      "truth": "As of 23 March, more than 374,000 cases of COVID-19 have been reported in over 190 countries and territories, resulting in more than 16,400 deaths and over 101,000 recoveries."
+    }
+  ]
+}
