@@ -1,4 +1,4 @@
-/* FactTrace - Minimal Modern Design */
+/* Galileo - Multi-Agent Fact Verification */
 
 * {
   box-sizing: border-box;
@@ -18,11 +18,11 @@ html, body, #root {
 .ant-card {
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-  border: 1px solid #f0f0f0;
+  border: 1px solid #E8E4F0;
 }
 
 .ant-card-head {
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid #F0EBF8;
   min-height: auto;
   padding: 16px 20px;
 }
@@ -69,14 +69,42 @@ html, body, #root {
   border-radius: 0 6px 6px 0 !important;
 }
 
-/* Smooth animations */
+/* ============== Animations ============== */
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .fade-in {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.4s ease-out;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.slide-in-right {
+  animation: slideInRight 0.4s ease-out;
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.scale-in {
+  animation: scaleIn 0.3s ease-out;
 }
 
 /* Status pulse */
@@ -89,7 +117,52 @@ html, body, #root {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
-/* Custom scrollbar */
+/* Thinking shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #F8F6FC 25%, #E8E4F0 50%, #F8F6FC 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Round transition */
+@keyframes roundPulse {
+  0% { box-shadow: 0 0 0 0 rgba(91, 75, 138, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(91, 75, 138, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(91, 75, 138, 0); }
+}
+
+.round-pulse {
+  animation: roundPulse 1s ease-out;
+}
+
+/* Verdict reveal */
+@keyframes verdictReveal {
+  0% { opacity: 0; transform: translateY(20px) scale(0.98); }
+  60% { transform: translateY(-4px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.verdict-reveal {
+  animation: verdictReveal 0.5s ease-out;
+}
+
+/* Timeline connector grow */
+@keyframes lineGrow {
+  from { height: 0; }
+  to { height: 100%; }
+}
+
+.line-grow {
+  animation: lineGrow 0.5s ease-out;
+}
+
+/* ============== Custom Scrollbar ============== */
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -108,7 +181,137 @@ html, body, #root {
   background: #bfbfbf;
 }
 
-/* Progress bar customization */
+/* ============== Galileo Theme Colors ============== */
+
+.galileo-primary {
+  color: #5B4B8A;
+}
+
+.galileo-secondary {
+  color: #7B6BA8;
+}
+
+.galileo-accent {
+  color: #9B8BC8;
+}
+
+.galileo-dark {
+  color: #2D2255;
+}
+
+.galileo-bg-primary {
+  background: #5B4B8A;
+}
+
+.galileo-bg-light {
+  background: #F8F6FC;
+}
+
+.galileo-bg-lighter {
+  background: #F0EBF8;
+}
+
+/* ============== Debate Round Styling ============== */
+
+.debate-round {
+  position: relative;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+}
+
+.debate-round:hover {
+  transform: translateX(4px);
+}
+
+.round-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.round-number.active {
+  background: #5B4B8A;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(91, 75, 138, 0.3);
+}
+
+.round-number.pending {
+  background: #E8E4F0;
+  color: #5B4B8A;
+}
+
+/* Timeline connector */
+.timeline-connector {
+  position: absolute;
+  left: 19px;
+  top: 40px;
+  width: 2px;
+  background: #E8E4F0;
+}
+
+/* ============== Agent Cards Grid ============== */
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+/* ============== Verdict Animation ============== */
+
+.final-verdict-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.final-verdict-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: shine 1.5s ease-out;
+}
+
+@keyframes shine {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* ============== Consensus Indicator ============== */
+
+.consensus-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.consensus-badge.agreed {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.consensus-badge.split {
+  background: #fffbe6;
+  color: #faad14;
+  border: 1px solid #ffe58f;
+}
+
+/* ============== Progress Components ============== */
+
 .ant-progress-inner {
   border-radius: 4px !important;
 }
@@ -117,7 +320,8 @@ html, body, #root {
   border-radius: 4px !important;
 }
 
-/* Result customization */
+/* ============== Result Styling ============== */
+
 .ant-result {
   padding: 24px 16px;
 }
@@ -128,4 +332,18 @@ html, body, #root {
 
 .ant-result-title {
   font-size: 20px;
+}
+
+/* ============== Responsive Adjustments ============== */
+
+@media (max-width: 768px) {
+  .agent-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .round-number {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
 }

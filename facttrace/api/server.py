@@ -1,6 +1,7 @@
 """FastAPI server for FactTrace - Multi-Agent Fact Verification System."""
 
 import asyncio
+import csv
 import json
 from pathlib import Path
 from typing import AsyncGenerator
@@ -19,14 +20,35 @@ from config import MODELS, SETUPS
 from agents import LiteralistAgent, ContextualistAgent, StatisticianAgent
 from debate.protocol import DebateProtocol, DebateResult
 from debate.verdict import VerdictSynthesizer
-from debate.crew import FactCheckCrew, SingleAgentCrewBaseline
+from debate.crew import FactCheckCrew
 
 
 def load_cases():
-    """Load cases from JSON file."""
-    data_path = Path(__file__).parent.parent / "data" / "cases.json"
-    with open(data_path) as f:
-        return json.load(f)["cases"]
+    """Load all test cases from data.csv."""
+    data_path = Path(__file__).parent.parent / "data.csv"
+    cases = []
+
+    with open(data_path, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for idx, row in enumerate(reader, start=1):
+            claim = row['claim'].strip()
+            truth = row['truth'].strip()
+
+            # Generate a short name from the claim (first few words)
+            words = claim.split()[:5]
+            name = ' '.join(words)
+            if len(claim.split()) > 5:
+                name += '...'
+
+            cases.append({
+                "id": idx,
+                "name": name,
+                "mutation_type": "Unknown",
+                "claim": claim,
+                "truth": truth
+            })
+
+    return cases
 
 
 CASES = load_cases()
@@ -116,7 +138,7 @@ async def stream_debate(case: dict, setup_name: str, model_name: str) -> AsyncGe
     """Stream debate events as Server-Sent Events."""
     setup = SETUPS[setup_name]
     model = MODELS[model_name]
-    use_crewai = setup.get("use_crewai", False)
+    paradigm = setup.get("paradigm", "baseline")
 
     def send_event(event_type: str, data) -> str:
         return f"data: {json.dumps({'type': event_type, 'data': data})}\n\n"
@@ -126,82 +148,332 @@ async def stream_debate(case: dict, setup_name: str, model_name: str) -> AsyncGe
     await asyncio.sleep(0.05)
 
     # Send setup info
-    yield send_event('setup', {'name': setup_name, 'description': setup['description']})
+    yield send_event('setup', {'name': setup_name, 'description': setup['description'], 'paradigm': paradigm})
     await asyncio.sleep(0.05)
 
-    if use_crewai:
-        # CrewAI-based execution
-        if setup["mode"] == "single":
-            yield send_event('phase', 'CrewAI Single Agent Analysis')
-            yield send_event('status', 'Analyzing claim with CrewAI...')
+    loop = asyncio.get_event_loop()
 
-            crew_baseline = SingleAgentCrewBaseline(model=model)
+    # ============== PARADIGM: BASELINE (Single Agent) ==============
+    if paradigm == "baseline":
+        yield send_event('phase', 'Single Agent Analysis')
+        yield send_event('status', 'Analyzing claim...')
 
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, crew_baseline.analyze, case["claim"], case["truth"], case["id"]
-            )
+        agent_info = [{"name": "Investigator", "color": "#9B8BC8", "role": "Comprehensive fact-checking"}]
+        yield send_event('agents', agent_info)
 
-            verdict = result.initial_verdicts[0]
+        crew = FactCheckCrew(model=model, max_rounds=1)
+        result = await loop.run_in_executor(
+            None, crew.analyze, case["claim"], case["truth"], case["id"]
+        )
+
+        verdict = result.initial_verdicts[0]
+        yield send_event('agent_verdict', {
+            'agent_name': 'Investigator',
+            'color': '#9B8BC8',
+            'verdict': verdict.verdict,
+            'confidence': verdict.confidence,
+            'reasoning': verdict.reasoning,
+            'evidence': verdict.evidence
+        })
+
+        yield send_event('final_verdict', {
+            'verdict': result.final_verdict,
+            'confidence': result.final_confidence,
+            'reasoning': result.final_reasoning,
+            'mutation_type': result.mutation_type
+        })
+
+    # ============== PARADIGM: ADVERSARIAL DEBATE ==============
+    elif paradigm == "adversarial":
+        agent_info = [
+            {"name": "Proponent", "color": "#52c41a", "role": "Argues FOR faithfulness"},
+            {"name": "Opponent", "color": "#ff4d4f", "role": "Argues AGAINST faithfulness"},
+            {"name": "Judge", "color": "#5B4B8A", "role": "Neutral arbiter"},
+        ]
+        yield send_event('agents', agent_info)
+        await asyncio.sleep(0.1)
+
+        yield send_event('phase', 'Phase 1: Opening Arguments')
+        yield send_event('agent_thinking', {'agent_name': 'Proponent', 'color': '#52c41a'})
+        yield send_event('status', 'Proponent building case for faithfulness...')
+        await asyncio.sleep(0.1)
+
+        rounds = setup.get("rounds", 2)
+        crew = FactCheckCrew(model=model, max_rounds=rounds)
+
+        result = await loop.run_in_executor(
+            None, crew.run_debate, case["claim"], case["truth"], case["id"]
+        )
+
+        # Stream the adversarial verdicts
+        color_map = {"Proponent": "#52c41a", "Opponent": "#ff4d4f"}
+        for verdict in result.initial_verdicts:
             yield send_event('agent_verdict', {
-                'agent_name': 'CrewAI Agent',
-                'color': 'gold',
+                'agent_name': verdict.agent_name,
+                'color': color_map.get(verdict.agent_name, "#9B8BC8"),
                 'verdict': verdict.verdict,
                 'confidence': verdict.confidence,
                 'reasoning': verdict.reasoning,
                 'evidence': verdict.evidence
             })
-
-            yield send_event('final_verdict', {
-                'verdict': result.final_verdict,
-                'confidence': result.final_confidence,
-                'reasoning': result.final_reasoning,
-                'mutation_type': result.mutation_type
-            })
-        else:
-            # CrewAI multi-agent jury
-            agent_info = [
-                {"name": "Literalist", "color": "red", "role": "Verify exact factual accuracy"},
-                {"name": "Contextualist", "color": "blue", "role": "Examine context preservation"},
-                {"name": "Statistician", "color": "green", "role": "Analyze numerical claims"},
-                {"name": "Judge", "color": "purple", "role": "Synthesize final verdict"},
-            ]
-            yield send_event('agents', agent_info)
             await asyncio.sleep(0.1)
 
-            yield send_event('phase', 'CrewAI Jury Analysis')
-            yield send_event('status', 'CrewAI agents deliberating...')
+        if result.debate_rounds:
+            yield send_event('phase', 'Phase 2: Rebuttals')
+            yield send_event('status', 'Agents exchanging rebuttals...')
+            await asyncio.sleep(0.1)
 
-            crew = FactCheckCrew(model=model, mode=setup["mode"])
+        yield send_event('phase', 'Phase 3: Judge Deliberation')
+        yield send_event('agent_thinking', {'agent_name': 'Judge', 'color': '#5B4B8A'})
+        await asyncio.sleep(0.1)
 
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, crew.run_debate, case["claim"], case["truth"], case["id"]
-            )
+        yield send_event('final_verdict', {
+            'verdict': result.final_verdict,
+            'confidence': result.final_confidence,
+            'reasoning': result.final_reasoning,
+            'mutation_type': result.mutation_type,
+            'dissenting': result.dissenting_opinions
+        })
 
-            # Stream individual verdicts
-            color_map = {"Literalist": "red", "Contextualist": "blue", "Statistician": "green"}
-            for verdict in result.initial_verdicts:
-                yield send_event('agent_verdict', {
-                    'agent_name': verdict.agent_name,
-                    'color': color_map.get(verdict.agent_name, "white"),
-                    'verdict': verdict.verdict,
-                    'confidence': verdict.confidence,
-                    'reasoning': verdict.reasoning,
-                    'evidence': verdict.evidence
-                })
-                await asyncio.sleep(0.1)
+    # ============== PARADIGM: JURY PANEL (6-Agent) ==============
+    elif paradigm == "jury":
+        agent_info = [
+            {"name": "The Numerical Hawk", "color": "#1890ff", "role": "Numbers don't lie, but rounding can kill"},
+            {"name": "The Temporal Detective", "color": "#52c41a", "role": "In a pandemic, yesterday's truth is today's lie"},
+            {"name": "The Spirit Defender", "color": "#722ed1", "role": "Would a reasonable person be misled?"},
+            {"name": "The Harm Assessor", "color": "#eb2f96", "role": "Facts shape behavior"},
+            {"name": "The Devil's Advocate", "color": "#ff4d4f", "role": "ADVERSARIAL - stress-tests consensus"},
+        ]
+        yield send_event('agents', agent_info)
+        await asyncio.sleep(0.1)
 
-            yield send_event('phase', 'Judge Synthesis')
-            yield send_event('final_verdict', {
-                'verdict': result.final_verdict,
-                'confidence': result.final_confidence,
-                'reasoning': result.final_reasoning,
-                'mutation_type': result.mutation_type,
-                'dissenting': result.dissenting_opinions
+        yield send_event('phase', 'Phase 1: 6-Agent Tribunal Debate')
+
+        crew = FactCheckCrew(model=model, max_rounds=10)
+
+        # Show thinking for each juror
+        for agent in agent_info:
+            yield send_event('agent_thinking', {'agent_name': agent['name'], 'color': agent['color']})
+            await asyncio.sleep(0.05)
+
+        yield send_event('status', '5 agents debating until 80% consensus (max 10 rounds)...')
+
+        result = await loop.run_in_executor(
+            None, crew.run_debate, case["claim"], case["truth"], case["id"]
+        )
+
+        # Stream individual verdicts
+        color_map = {
+            "The Numerical Hawk": "#1890ff",
+            "The Temporal Detective": "#52c41a",
+            "The Spirit-of-the-Law Defender": "#722ed1",
+            "The Harm Assessor": "#eb2f96",
+            "The Devil's Advocate": "#ff4d4f",
+        }
+        for verdict in result.initial_verdicts:
+            yield send_event('agent_verdict', {
+                'agent_name': verdict.agent_name,
+                'color': color_map.get(verdict.agent_name, "#9B8BC8"),
+                'verdict': verdict.verdict,
+                'confidence': verdict.confidence,
+                'reasoning': verdict.reasoning,
+                'evidence': verdict.evidence
             })
+            await asyncio.sleep(0.1)
 
-    elif setup["mode"] == "single":
+        actual_rounds = len(result.debate_rounds) if result.debate_rounds else 1
+        yield send_event('phase', f'Synthesis Judge Verdict (after {actual_rounds} rounds)')
+        yield send_event('final_verdict', {
+            'verdict': result.final_verdict,
+            'confidence': result.final_confidence,
+            'reasoning': result.final_reasoning,
+            'mutation_type': result.mutation_type,
+            'dissenting': result.dissenting_opinions
+        })
+
+    # ============== PARADIGM: CRITIC-PROPOSER-JUDGE ==============
+    elif paradigm == "critic-proposer":
+        agent_info = [
+            {"name": "Proposer", "color": "#1890ff", "role": "Initial assessment"},
+            {"name": "Critic", "color": "#ff4d4f", "role": "Challenge & critique"},
+            {"name": "Synthesizer", "color": "#faad14", "role": "Reconcile views"},
+            {"name": "Judge", "color": "#5B4B8A", "role": "Final verdict"},
+        ]
+        yield send_event('agents', agent_info)
+        await asyncio.sleep(0.1)
+
+        yield send_event('phase', 'Step 1: Proposer Assessment')
+        yield send_event('agent_thinking', {'agent_name': 'Proposer', 'color': '#1890ff'})
+        yield send_event('status', 'Proposer generating initial interpretation...')
+
+        crew = FactCheckCrew(model=model, max_rounds=3)
+
+        result = await loop.run_in_executor(
+            None, crew.run_debate, case["claim"], case["truth"], case["id"]
+        )
+
+        # Stream each step
+        color_map = {"Proposer": "#1890ff", "Critic": "#ff4d4f", "Synthesizer": "#faad14"}
+        step_names = ["Proposer Assessment", "Critic Challenge", "Synthesizer Reconciliation"]
+
+        for i, verdict in enumerate(result.initial_verdicts):
+            if i == 1:
+                yield send_event('phase', 'Step 2: Critic Challenge')
+                yield send_event('agent_thinking', {'agent_name': 'Critic', 'color': '#ff4d4f'})
+            elif i == 2:
+                yield send_event('phase', 'Step 3: Synthesizer Reconciliation')
+                yield send_event('agent_thinking', {'agent_name': 'Synthesizer', 'color': '#faad14'})
+
+            yield send_event('agent_verdict', {
+                'agent_name': verdict.agent_name,
+                'color': color_map.get(verdict.agent_name, "#9B8BC8"),
+                'verdict': verdict.verdict,
+                'confidence': verdict.confidence,
+                'reasoning': verdict.reasoning,
+                'evidence': verdict.evidence
+            })
+            await asyncio.sleep(0.1)
+
+        yield send_event('phase', 'Step 4: Judge Final Verdict')
+        yield send_event('agent_thinking', {'agent_name': 'Judge', 'color': '#5B4B8A'})
+        await asyncio.sleep(0.1)
+
+        yield send_event('final_verdict', {
+            'verdict': result.final_verdict,
+            'confidence': result.final_confidence,
+            'reasoning': result.final_reasoning,
+            'mutation_type': result.mutation_type,
+            'dissenting': result.dissenting_opinions
+        })
+
+    # ============== PARADIGM: ITERATIVE DEBATE (6-Agent) ==============
+    elif paradigm == "iterative":
+        import queue
+        import threading
+
+        agent_info = [
+            {"name": "The Numerical Hawk", "color": "#1890ff", "role": "Numbers don't lie, but rounding can kill"},
+            {"name": "The Temporal Detective", "color": "#52c41a", "role": "In a pandemic, yesterday's truth is today's lie"},
+            {"name": "The Spirit Defender", "color": "#722ed1", "role": "Would a reasonable person be misled?"},
+            {"name": "The Harm Assessor", "color": "#eb2f96", "role": "Facts shape behavior"},
+            {"name": "The Devil's Advocate", "color": "#ff4d4f", "role": "ADVERSARIAL - stress-tests consensus"},
+        ]
+        yield send_event('agents', agent_info)
+        await asyncio.sleep(0.1)
+
+        rounds = setup.get("rounds", 5)
+
+        yield send_event('status', f'6-AGENT DEBATE: 3-{rounds} rounds until 80% consensus...')
+        yield send_event('status', "Devil's Advocate will challenge any emerging consensus!")
+
+        color_map = {
+            "The Numerical Hawk": "#1890ff",
+            "The Temporal Detective": "#52c41a",
+            "The Spirit-of-the-Law Defender": "#722ed1",
+            "The Harm Assessor": "#eb2f96",
+            "The Devil's Advocate": "#ff4d4f",
+        }
+
+        # Use a queue to stream events from the background thread
+        event_queue = queue.Queue()
+        result_holder = [None]
+
+        current_round = [1]
+
+        def on_round_start(round_num):
+            """Called when a new round starts."""
+            if round_num == 1:
+                event_queue.put(('phase', 'Round 1: Initial Positions'))
+            else:
+                event_queue.put(('phase', f'Round {round_num}: Rebuttals'))
+            event_queue.put(('debate_round', round_num))
+
+        def on_agent_thinking(agent_name):
+            """Called when an agent starts thinking."""
+            event_queue.put(('agent_thinking', {
+                'agent_name': agent_name,
+                'color': color_map.get(agent_name, "#9B8BC8")
+            }))
+
+        def on_verdict(verdict):
+            """Called when each agent submits a verdict."""
+            event_queue.put(('agent_verdict', {
+                'agent_name': verdict.agent_name,
+                'color': color_map.get(verdict.agent_name, "#9B8BC8"),
+                'verdict': verdict.verdict,
+                'confidence': verdict.confidence,
+                'reasoning': verdict.reasoning,
+                'evidence': verdict.evidence
+            }))
+
+        def on_round_complete(round_num, verdicts):
+            """Called when a round completes."""
+            event_queue.put(('round_complete', round_num))
+
+        def run_debate():
+            crew = FactCheckCrew(model=model, max_rounds=rounds)
+            result_holder[0] = crew.run_debate(
+                case["claim"], case["truth"], case["id"],
+                on_verdict=on_verdict,
+                on_round_complete=on_round_complete,
+                on_agent_thinking=on_agent_thinking,
+                on_round_start=on_round_start
+            )
+            event_queue.put(('done', None))
+
+        # Start debate in background thread
+        debate_thread = threading.Thread(target=run_debate)
+        debate_thread.start()
+
+        # Stream events as they come in
+        while True:
+            try:
+                event_type, event_data = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: event_queue.get(timeout=0.5)
+                )
+
+                if event_type == 'done':
+                    break
+                elif event_type == 'debate_round':
+                    yield send_event('debate_round', event_data)
+                elif event_type == 'agent_thinking':
+                    yield send_event('agent_thinking', event_data)
+                elif event_type == 'agent_verdict':
+                    yield send_event('agent_verdict', event_data)
+                elif event_type == 'round_complete':
+                    yield send_event('status', f'Round {event_data} complete')
+                elif event_type == 'phase':
+                    yield send_event('phase', event_data)
+
+                await asyncio.sleep(0.05)
+            except:
+                # Queue timeout - check if thread is still alive
+                if not debate_thread.is_alive():
+                    break
+
+        debate_thread.join()
+        result = result_holder[0]
+
+        actual_rounds = len(result.debate_rounds) if result.debate_rounds else 1
+        if actual_rounds < rounds:
+            yield send_event('status', f'Consensus reached after {actual_rounds} round(s)')
+        else:
+            yield send_event('status', f'Max rounds reached - taking majority vote')
+
+        yield send_event('phase', 'Synthesis Judge Deliberation')
+        yield send_event('agent_thinking', {'agent_name': 'The Synthesis Judge', 'color': '#faad14'})
+        await asyncio.sleep(0.1)
+
+        yield send_event('final_verdict', {
+            'verdict': result.final_verdict,
+            'confidence': result.final_confidence,
+            'reasoning': result.final_reasoning,
+            'mutation_type': result.mutation_type,
+            'dissenting': result.dissenting_opinions
+        })
+
+    # ============== LEGACY: Non-CrewAI paths ==============
+    elif setup.get("mode") == "single":
         # Original single agent baseline
         yield send_event('phase', 'Single Agent Analysis')
         yield send_event('status', 'Analyzing claim...')

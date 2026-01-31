@@ -15,7 +15,13 @@ from config import MODELS, DEFAULT_MODEL, SETUPS, DEFAULT_SETUP
 from agents import LiteralistAgent, ContextualistAgent, StatisticianAgent
 from debate.protocol import DebateProtocol, SingleAgentBaseline
 from debate.verdict import VerdictSynthesizer
-from debate.crew import FactCheckCrew, SingleAgentCrewBaseline
+from debate.crew import (
+    SingleAgentCrewBaseline,
+    AdversarialDebateCrew,
+    JuryPanelCrew,
+    CriticProposerJudgeCrew,
+    IterativeDebateCrew,
+)
 from utils.display import (
     console,
     print_welcome,
@@ -136,37 +142,82 @@ def run_single_setup(case: dict, setup_name: str, model_name: str, verbose: bool
     """Run a single setup on a case and return results."""
     setup = SETUPS[setup_name]
     model = MODELS[model_name]
-    use_crewai = setup.get("use_crewai", False)
+    paradigm = setup.get("paradigm", "baseline")
 
-    if use_crewai:
-        # CrewAI-based execution
-        if setup["mode"] == "single":
-            crew_baseline = SingleAgentCrewBaseline(model=model)
-            result = crew_baseline.analyze(case["claim"], case["truth"], case["id"])
+    # Paradigm-based execution
+    if paradigm == "baseline":
+        crew = SingleAgentCrewBaseline(model=model)
+        result = crew.analyze(case["claim"], case["truth"], case["id"])
+        return {
+            "setup": setup_name,
+            "verdict": result.final_verdict,
+            "confidence": result.final_confidence,
+            "reasoning": result.final_reasoning,
+            "agents_used": 1,
+            "debate_result": result,
+        }
 
-            return {
-                "setup": setup_name,
-                "verdict": result.final_verdict,
-                "confidence": result.final_confidence,
-                "reasoning": result.final_reasoning,
-                "agents_used": 1,
-                "debate_result": result,
-            }
-        else:
-            # Multi-agent CrewAI jury
-            crew = FactCheckCrew(model=model, mode=setup["mode"])
-            result = crew.run_debate(case["claim"], case["truth"], case["id"])
+    elif paradigm == "adversarial":
+        rounds = setup.get("rounds", 2)
+        crew = AdversarialDebateCrew(model=model, rounds=rounds)
+        result = crew.run_debate(case["claim"], case["truth"], case["id"])
+        return {
+            "setup": setup_name,
+            "verdict": result.final_verdict,
+            "confidence": result.final_confidence,
+            "reasoning": result.final_reasoning,
+            "mutation_type": result.mutation_type,
+            "dissenting": result.dissenting_opinions,
+            "agents_used": 3,
+            "debate_result": result,
+        }
 
-            return {
-                "setup": setup_name,
-                "verdict": result.final_verdict,
-                "confidence": result.final_confidence,
-                "reasoning": result.final_reasoning,
-                "mutation_type": result.mutation_type,
-                "dissenting": result.dissenting_opinions,
-                "agents_used": 3,
-                "debate_result": result,
-            }
+    elif paradigm == "jury":
+        aggregation = setup.get("aggregation", "weighted")
+        crew = JuryPanelCrew(model=model, aggregation=aggregation)
+        result = crew.run_debate(case["claim"], case["truth"], case["id"])
+        return {
+            "setup": setup_name,
+            "verdict": result.final_verdict,
+            "confidence": result.final_confidence,
+            "reasoning": result.final_reasoning,
+            "mutation_type": result.mutation_type,
+            "dissenting": result.dissenting_opinions,
+            "agents_used": 3,
+            "debate_result": result,
+        }
+
+    elif paradigm == "critic-proposer":
+        crew = CriticProposerJudgeCrew(model=model)
+        result = crew.run_debate(case["claim"], case["truth"], case["id"])
+        return {
+            "setup": setup_name,
+            "verdict": result.final_verdict,
+            "confidence": result.final_confidence,
+            "reasoning": result.final_reasoning,
+            "mutation_type": result.mutation_type,
+            "dissenting": result.dissenting_opinions,
+            "agents_used": 4,
+            "debate_result": result,
+        }
+
+    elif paradigm == "iterative":
+        rounds = setup.get("rounds", 10)
+        adaptive = setup.get("adaptive_stop", True)
+        consensus_type = setup.get("consensus_type", "majority")
+        crew = IterativeDebateCrew(model=model, max_rounds=rounds, adaptive_stop=adaptive, consensus_type=consensus_type)
+        result = crew.run_debate(case["claim"], case["truth"], case["id"])
+        return {
+            "setup": setup_name,
+            "verdict": result.final_verdict,
+            "confidence": result.final_confidence,
+            "reasoning": result.final_reasoning,
+            "mutation_type": result.mutation_type,
+            "dissenting": result.dissenting_opinions,
+            "agents_used": 3,
+            "debate_result": result,
+        }
+
     else:
         # Original implementation
         if setup["mode"] == "single":
@@ -220,13 +271,27 @@ def display_result(result: dict, verbose: bool):
     """Display the result of a setup run."""
     debate_result = result["debate_result"]
 
+    # Agent color mapping for all paradigms
+    agent_colors = {
+        "Literalist": "magenta",
+        "Contextualist": "blue",
+        "Statistician": "cyan",
+        "Proponent": "green",
+        "Opponent": "red",
+        "Proposer": "blue",
+        "Critic": "red",
+        "Synthesizer": "yellow",
+        "Judge": "magenta",
+        "Investigator": "cyan",
+    }
+
     # Show individual agent verdicts
     if result["agents_used"] > 1:
         console.print("\n[bold]Agent Verdicts:[/bold]")
         for verdict in debate_result.initial_verdicts:
             print_agent_speech(
                 agent_name=verdict.agent_name,
-                color={"Literalist": "red", "Contextualist": "blue", "Statistician": "green"}.get(verdict.agent_name, "white"),
+                color=agent_colors.get(verdict.agent_name, "white"),
                 message=verdict.reasoning if verbose else verdict.reasoning[:200] + "..." if len(verdict.reasoning) > 200 else verdict.reasoning,
                 verdict=verdict.verdict,
                 confidence=verdict.confidence
@@ -265,19 +330,25 @@ def display_result(result: dict, verbose: bool):
 def run_case(case: dict, setup_name: str, model_name: str, verbose: bool) -> dict:
     """Run a single case with the specified setup."""
     setup = SETUPS[setup_name]
-    use_crewai = setup.get("use_crewai", False)
+    paradigm = setup.get("paradigm", "baseline")
 
     print_case_header(case["id"], case["name"], case["mutation_type"])
     print_claim_vs_truth(case["claim"], case["truth"])
 
-    console.print(f"[dim]Setup: {setup_name} - {setup['description']}[/dim]\n")
+    console.print(f"[dim]Setup: {setup_name} - {setup['description']}[/dim]")
+    console.print(f"[dim]Paradigm: {paradigm.title()}[/dim]\n")
 
-    # Show agents if multi-agent (only for non-CrewAI setups since CrewAI handles this internally)
-    if setup["mode"] != "single" and not use_crewai:
-        agents = create_agents(setup["agents"], MODELS[model_name])
-        print_agents_intro(agents)
-    elif setup["mode"] != "single" and use_crewai:
-        console.print("[dim]Using CrewAI agents: Literalist, Contextualist, Statistician, Judge[/dim]\n")
+    # Show paradigm-specific agent info
+    paradigm_agents = {
+        "baseline": ["Single Investigator"],
+        "adversarial": ["Proponent", "Opponent", "Judge"],
+        "jury": ["Literalist", "Contextualist", "Statistician"],
+        "critic-proposer": ["Proposer", "Critic", "Synthesizer", "Judge"],
+        "iterative": ["Literalist", "Contextualist", "Statistician"],
+    }
+    agents_list = paradigm_agents.get(paradigm, [])
+    if agents_list:
+        console.print(f"[dim]Agents: {', '.join(agents_list)}[/dim]\n")
 
     # Run the analysis
     with console.status("[bold green]Agents deliberating..."):

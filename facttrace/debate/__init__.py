@@ -2,7 +2,7 @@
 
 from debate.protocol import DebateProtocol, SingleAgentBaseline, DebateResult, DebateRound
 from debate.verdict import VerdictSynthesizer, FinalVerdict
-from debate.crew import FactCheckCrew, SingleAgentCrewBaseline, CrewDebateResult
+from debate.crew import FactCheckCrew, CrewDebateResult
 
 __all__ = [
     # Original protocol
@@ -14,6 +14,5 @@ __all__ = [
     "FinalVerdict",
     # CrewAI-based
     "FactCheckCrew",
-    "SingleAgentCrewBaseline",
     "CrewDebateResult",
 ]

@@ -4,7 +4,7 @@ import { ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { LandingPage } from './components/LandingPage';
 import { CaseSelector } from './components/CaseSelector';
 import { DebateTimeline } from './components/DebateTimeline';
-import type { Case, Setup, DebateEvent } from './types';
+import type { Case, DebateEvent } from './types';
 import './App.css';
 
 const { Content } = Layout;
@@ -21,9 +21,7 @@ interface TimelineEvent {
 function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [cases, setCases] = useState<Case[]>([]);
-  const [setups, setSetups] = useState<Record<string, Setup>>({});
   const [selectedCase, setSelectedCase] = useState<number | null>(null);
-  const [selectedSetup, setSelectedSetup] = useState('jury-llm');
   const [selectedModel, setSelectedModel] = useState('mini');
   const [isRunning, setIsRunning] = useState(false);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
@@ -35,13 +33,10 @@ function App() {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API_BASE}/api/cases`).then((r) => r.json()),
-      fetch(`${API_BASE}/api/setups`).then((r) => r.json()),
-    ])
-      .then(([casesData, setupsData]) => {
+    fetch(`${API_BASE}/api/cases`)
+      .then((r) => r.json())
+      .then((casesData) => {
         setCases(casesData.cases);
-        setSetups(setupsData.setups);
         setIsConnected(true);
         if (casesData.cases.length > 0) {
           setSelectedCase(casesData.cases[0].id);
@@ -75,7 +70,7 @@ function App() {
     setCurrentCase(null);
 
     const eventSource = new EventSource(
-      `${API_BASE}/api/debate/stream?case_id=${selectedCase}&setup=${selectedSetup}&model=${selectedModel}`
+      `${API_BASE}/api/debate/stream?case_id=${selectedCase}&setup=iterative&model=${selectedModel}`
     );
     eventSourceRef.current = eventSource;
 
@@ -121,7 +116,7 @@ function App() {
       eventSource.close();
       eventSourceRef.current = null;
     };
-  }, [selectedCase, selectedSetup, selectedModel, stopDebate]);
+  }, [selectedCase, selectedModel, stopDebate]);
 
   useEffect(() => {
     return () => {
@@ -143,7 +138,7 @@ function App() {
       <ConfigProvider
         theme={{
           token: {
-            colorPrimary: '#000',
+            colorPrimary: '#5B4B8A',
             borderRadius: 8,
             fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
           },
@@ -158,7 +153,7 @@ function App() {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#000',
+          colorPrimary: '#5B4B8A',
           borderRadius: 8,
           fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
         },
@@ -183,8 +178,9 @@ function App() {
             >
               Back
             </Button>
-            <div>
-              <Title level={4} style={{ margin: 0, fontWeight: 600 }}>FactTrace</Title>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 24 }}>⚖️</span>
+              <Title level={4} style={{ margin: 0, fontWeight: 600, color: '#2D2255' }}>Dialectica</Title>
             </div>
           </div>
           <Tag color={isConnected ? 'success' : 'error'}>
@@ -208,12 +204,9 @@ function App() {
             <Col xs={24} md={8} lg={6} xl={5}>
               <CaseSelector
                 cases={cases}
-                setups={setups}
                 selectedCase={selectedCase}
-                selectedSetup={selectedSetup}
                 selectedModel={selectedModel}
                 onCaseChange={setSelectedCase}
-                onSetupChange={setSelectedSetup}
                 onModelChange={setSelectedModel}
                 onStart={startDebate}
                 onStop={stopDebate}
@@ -221,16 +214,16 @@ function App() {
               />
             </Col>
 
-            {/* Right Panel - Debate */}
+            {/* Right Panel - Investigation */}
             <Col xs={24} md={16} lg={18} xl={19}>
               <Card
                 title={
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>
+                    <span style={{ color: '#2D2255' }}>
                       {currentCase ? (
                         <>Case {currentCase.id}: {currentCase.name}</>
                       ) : (
-                        'Debate Arena'
+                        'Investigation Chamber'
                       )}
                     </span>
                     {events.length > 0 && !isRunning && (
@@ -249,20 +242,20 @@ function App() {
                     gap: 16,
                     marginBottom: 20,
                     padding: 16,
-                    background: '#fafafa',
+                    background: '#F8F6FC',
                     borderRadius: 8
                   }}>
                     <div>
-                      <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Claim
+                      <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: '#5B4B8A' }}>
+                        Claim Under Investigation
                       </Text>
                       <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>
                         {currentCase.claim}
                       </div>
                     </div>
                     <div>
-                      <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Source Truth
+                      <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: '#5B4B8A' }}>
+                        Source Evidence
                       </Text>
                       <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>
                         {currentCase.truth}
@@ -280,11 +273,11 @@ function App() {
                 ) : (
                   <div style={{ textAlign: 'center', padding: '80px 20px' }}>
                     <div style={{ fontSize: 48, marginBottom: 16 }}>⚖️</div>
-                    <Title level={5} style={{ fontWeight: 500, marginBottom: 8 }}>
-                      Ready to Verify
+                    <Title level={5} style={{ fontWeight: 500, marginBottom: 8, color: '#2D2255' }}>
+                      Ready to Investigate
                     </Title>
                     <Text type="secondary">
-                      Configure the setup and click Start Debate
+                      Configure the setup and click Start Investigation
                     </Text>
                   </div>
                 )}

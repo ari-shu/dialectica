@@ -1,80 +1,74 @@
 import { Card, Select, Button, Typography, Segmented } from 'antd';
 import { PlayCircleOutlined, PauseOutlined } from '@ant-design/icons';
-import type { Case, Setup } from '../types';
+import type { Case } from '../types';
 
 const { Text } = Typography;
 
 interface CaseSelectorProps {
   cases: Case[];
-  setups: Record<string, Setup>;
   selectedCase: number | null;
-  selectedSetup: string;
   selectedModel: string;
   onCaseChange: (caseId: number) => void;
-  onSetupChange: (setup: string) => void;
   onModelChange: (model: string) => void;
   onStart: () => void;
   onStop: () => void;
   isRunning: boolean;
 }
 
-const AGENT_DETAILS: Record<string, { color: string; role: string; methodology: string; checks: string[] }> = {
-  literalist: {
-    color: '#ff4d4f',
-    role: 'Pedantic Fact-Checker',
-    methodology: 'Strict textual comparison. Any deviation in hard facts is a potential mutation.',
-    checks: ['Exact numbers & dates', 'Temporal markers', 'Precise wording'],
-  },
-  contextualist: {
+const AGENTS = [
+  {
+    key: 'numerical_hawk',
+    name: 'The Numerical Hawk',
     color: '#1890ff',
-    role: 'Context Analyzer',
-    methodology: 'Evaluates if the claim preserves the spirit and implications of the source.',
-    checks: ['Missing caveats', 'Omitted qualifiers', 'Shifted implications'],
+    icon: '🔢',
+    role: 'Numerical Precision',
+    description: '"Numbers don\'t lie, but rounding can kill." Flags ANY numerical discrepancy.',
   },
-  statistician: {
+  {
+    key: 'temporal_detective',
+    name: 'The Temporal Detective',
     color: '#52c41a',
-    role: 'Numerical Expert',
-    methodology: 'Analyzes numerical presentation and whether framing is fair.',
-    checks: ['Rounding accuracy', 'Date shifts', 'Statistical framing'],
+    icon: '⏰',
+    role: 'Temporal Precision',
+    description: '"In a pandemic, yesterday\'s truth is today\'s lie." Catches time-related distortions.',
   },
-};
-
-const SETUP_INFO: Record<string, { title: string; description: string }> = {
-  single: {
-    title: 'Single Agent',
-    description: 'One general-purpose agent analyzes the claim. Fast but less thorough.',
+  {
+    key: 'spirit_defender',
+    name: 'The Spirit Defender',
+    color: '#722ed1',
+    icon: '⚖️',
+    role: 'Contextual Equivalence',
+    description: '"Would a reasonable person be misled?" Argues for practical equivalence.',
   },
-  'jury-vote': {
-    title: '3-Agent Jury (Vote)',
-    description: 'Three specialized agents analyze independently. Final verdict by confidence-weighted majority vote.',
+  {
+    key: 'harm_assessor',
+    name: 'The Harm Assessor',
+    color: '#eb2f96',
+    icon: '🏥',
+    role: 'Consequence Analysis',
+    description: '"Facts shape behavior." Evaluates real-world consequences of mutations.',
   },
-  'jury-llm': {
-    title: '3-Agent Jury (LLM Judge)',
-    description: 'Three specialized agents analyze independently. An LLM judge synthesizes the final verdict.',
+  {
+    key: 'devils_advocate',
+    name: 'The Devil\'s Advocate',
+    color: '#ff4d4f',
+    icon: '😈',
+    role: 'Adversarial',
+    description: '"You\'re agreeing too fast!" Stress-tests the emerging consensus.',
+    isAdversarial: true,
   },
-  'jury-deliberate': {
-    title: '3-Agent Jury (Deliberation)',
-    description: 'Agents analyze, then respond to each other before final synthesis. Most thorough.',
-  },
-};
+];
 
 export function CaseSelector({
   cases,
-  setups,
   selectedCase,
-  selectedSetup,
   selectedModel,
   onCaseChange,
-  onSetupChange,
   onModelChange,
   onStart,
   onStop,
   isRunning,
 }: CaseSelectorProps) {
-  const currentSetup = setups[selectedSetup];
-  const setupInfo = SETUP_INFO[selectedSetup];
-  const isMultiAgent = selectedSetup !== 'single';
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Case */}
@@ -94,80 +88,56 @@ export function CaseSelector({
         />
       </Card>
 
-      {/* Setup */}
+      {/* The Tribunal */}
       <Card size="small" styles={{ body: { padding: 16 } }}>
-        <Text type="secondary" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 8 }}>
-          Setup
+        <Text type="secondary" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 12, color: '#5B4B8A' }}>
+          The Tribunal
         </Text>
-        <Select
-          style={{ width: '100%' }}
-          value={selectedSetup}
-          onChange={onSetupChange}
-          disabled={isRunning}
-          options={Object.keys(setups).map((key) => ({
-            value: key,
-            label: SETUP_INFO[key]?.title || key,
-          }))}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {AGENTS.map((agent) => (
+            <div
+              key={agent.key}
+              style={{
+                padding: 10,
+                background: agent.isAdversarial ? '#fff8f8' : '#fff',
+                borderRadius: 8,
+                border: agent.isAdversarial ? '1px solid #ffccc7' : '1px solid #f0f0f0',
+                borderLeft: `3px solid ${agent.color}`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 16 }}>{agent.icon}</span>
+                <Text strong style={{ fontSize: 12 }}>{agent.name}</Text>
+                {agent.isAdversarial && (
+                  <span style={{
+                    fontSize: 9,
+                    padding: '1px 5px',
+                    background: '#ff4d4f',
+                    color: '#fff',
+                    borderRadius: 3,
+                    fontWeight: 600,
+                  }}>
+                    ADVERSARIAL
+                  </span>
+                )}
+              </div>
+              <Text style={{ fontSize: 11, color: '#666', display: 'block' }}>
+                {agent.description}
+              </Text>
+            </div>
+          ))}
+        </div>
 
-        {/* Setup Description */}
-        {setupInfo && (
-          <div style={{ marginTop: 12, padding: 12, background: '#f9f9f9', borderRadius: 6 }}>
-            <Text style={{ fontSize: 12, lineHeight: 1.5 }}>{setupInfo.description}</Text>
-          </div>
-        )}
-      </Card>
-
-      {/* Agents (for multi-agent setups) */}
-      {isMultiAgent && currentSetup?.agents && (
-        <Card size="small" styles={{ body: { padding: 16 } }}>
-          <Text type="secondary" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 12 }}>
-            The Jury
+        {/* Paradigm info */}
+        <div style={{ marginTop: 12, padding: 10, background: '#F8F6FC', borderRadius: 6 }}>
+          <Text style={{ fontSize: 11, color: '#5B4B8A', display: 'block', marginBottom: 4 }}>
+            6-Agent Debate (3-5 Rounds)
           </Text>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {currentSetup.agents.map((agentKey) => {
-              const agent = AGENT_DETAILS[agentKey];
-              if (!agent) return null;
-              return (
-                <div
-                  key={agentKey}
-                  style={{
-                    padding: 10,
-                    background: '#fff',
-                    borderRadius: 6,
-                    border: '1px solid #f0f0f0',
-                    borderLeft: `3px solid ${agent.color}`,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <Text strong style={{ fontSize: 12, textTransform: 'capitalize' }}>{agentKey}</Text>
-                    <Text type="secondary" style={{ fontSize: 10 }}>· {agent.role}</Text>
-                  </div>
-                  <Text style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 6 }}>
-                    {agent.methodology}
-                  </Text>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {agent.checks.map((check, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          fontSize: 9,
-                          padding: '2px 6px',
-                          background: '#f5f5f5',
-                          borderRadius: 3,
-                          color: '#888',
-                        }}
-                      >
-                        {check}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
+          <Text style={{ fontSize: 11, color: '#666' }}>
+            Minimum 3 rounds, consensus (80%) can stop early. The Synthesis Judge renders the final verdict.
+          </Text>
+        </div>
+      </Card>
 
       {/* Model */}
       <Card size="small" styles={{ body: { padding: 16 } }}>
@@ -193,9 +163,9 @@ export function CaseSelector({
           size="large"
           icon={<PauseOutlined />}
           onClick={onStop}
-          style={{ background: '#ff4d4f', color: '#fff', border: 'none', height: 48 }}
+          style={{ background: '#cf4444', color: '#fff', border: 'none', height: 48 }}
         >
-          Stop Debate
+          Stop Investigation
         </Button>
       ) : (
         <Button
@@ -205,9 +175,9 @@ export function CaseSelector({
           icon={<PlayCircleOutlined />}
           onClick={onStart}
           disabled={!selectedCase}
-          style={{ background: '#000', border: 'none', height: 48 }}
+          style={{ background: '#5B4B8A', border: 'none', height: 48 }}
         >
-          Start Debate
+          Start Investigation
         </Button>
       )}
     </div>
