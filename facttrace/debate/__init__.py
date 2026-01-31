@@ -1,6 +1,19 @@
 """FactTrace Debate Module."""
 
-from debate.protocol import DebateProtocol
-from debate.verdict import VerdictSynthesizer
+from debate.protocol import DebateProtocol, SingleAgentBaseline, DebateResult, DebateRound
+from debate.verdict import VerdictSynthesizer, FinalVerdict
+from debate.crew import FactCheckCrew, SingleAgentCrewBaseline, CrewDebateResult
 
-__all__ = ["DebateProtocol", "VerdictSynthesizer"]
+__all__ = [
+    # Original protocol
+    "DebateProtocol",
+    "SingleAgentBaseline",
+    "DebateResult",
+    "DebateRound",
+    "VerdictSynthesizer",
+    "FinalVerdict",
+    # CrewAI-based
+    "FactCheckCrew",
+    "SingleAgentCrewBaseline",
+    "CrewDebateResult",
+]

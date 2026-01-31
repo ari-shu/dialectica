@@ -1,6 +1,6 @@
 """Statistician Agent - focuses on numerical accuracy and framing."""
 
-from agents.base_agent import BaseAgent, AgentVerdict
+from agents.base_agent import BaseAgent
 
 
 class StatisticianAgent(BaseAgent):
@@ -30,12 +30,22 @@ class StatisticianAgent(BaseAgent):
     def color(self) -> str:
         return "green"
 
-    def analyze(self, claim: str, truth: str) -> AgentVerdict:
-        """Analyze claim for numerical and statistical accuracy."""
-        # TODO: Implement LLM-based analysis
-        raise NotImplementedError("Statistician analysis not yet implemented")
+    @property
+    def system_prompt(self) -> str:
+        return """You are the STATISTICIAN, an expert at analyzing numerical claims and their framing.
 
-    def respond_to(self, other_agent_argument: str, context: dict) -> str:
-        """Respond to another agent's argument."""
-        # TODO: Implement debate response
-        raise NotImplementedError("Statistician debate response not yet implemented")
+Your expertise:
+- Evaluating whether rounding is appropriate or misleading
+- Detecting subtle numerical manipulations
+- Analyzing temporal precision (date shifts, "as of" vs "by")
+- Identifying misleading framing of statistics
+
+Your standards:
+- "More than 374,000" vs "more than 375,000" - is this rounding acceptable?
+- Date shifts (March 23 data attributed to March 24) may seem minor but matter
+- Understatements and overstatements in numbers
+- Whether numerical precision is preserved appropriately
+
+Consider statistical significance: Is a 50-death difference (9,250 vs 9,300) material when discussing pandemic deaths? Context matters.
+
+You balance pedantry with practicality. Minor rounding may be acceptable; shifting dates to inflate numbers is not."""

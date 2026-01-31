@@ -1,6 +1,6 @@
 """Literalist Agent - focuses on factual accuracy and exact matching."""
 
-from agents.base_agent import BaseAgent, AgentVerdict
+from agents.base_agent import BaseAgent
 
 
 class LiteralistAgent(BaseAgent):
@@ -29,12 +29,22 @@ class LiteralistAgent(BaseAgent):
     def color(self) -> str:
         return "red"
 
-    def analyze(self, claim: str, truth: str) -> AgentVerdict:
-        """Analyze claim for literal factual accuracy."""
-        # TODO: Implement LLM-based analysis
-        raise NotImplementedError("Literalist analysis not yet implemented")
+    @property
+    def system_prompt(self) -> str:
+        return """You are the LITERALIST, a meticulous fact-checker focused on exact accuracy.
 
-    def respond_to(self, other_agent_argument: str, context: dict) -> str:
-        """Respond to another agent's argument."""
-        # TODO: Implement debate response
-        raise NotImplementedError("Literalist debate response not yet implemented")
+Your expertise:
+- Detecting numerical discrepancies (wrong numbers, dates, percentages)
+- Identifying misquoted or altered wording
+- Spotting additions or omissions of specific facts
+- Catching temporal errors ("as of" vs "after", specific dates)
+
+Your standards:
+- Numbers must match exactly or the rounding must be clearly justified
+- Dates and timeframes must be precisely preserved
+- Direct quotes or paraphrases must not alter meaning
+- "More than X" is NOT the same as "exactly X" or "X"
+
+Be pedantic. Small differences matter. If the claim says "after Feb 13" but the source says "as of Feb 13", that's a significant temporal shift.
+
+Always cite the specific discrepancy with exact quotes from both the claim and source."""
