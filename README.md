@@ -1,4 +1,4 @@
-# FactTrace
+# Dialectica
 
 A multi-agent fact verification system that uses a "jury of AI agents" to debate whether claims are faithful representations of source facts or mutations.
 
